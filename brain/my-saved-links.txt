@@ -1,0 +1,91 @@
+THE BRAIN v0.6 - Master Reference
+Last Updated: March 13, 2026
+
+=== AI/ML BOOKS ===
+"Understanding Deep Learning" - udlbook.github.io/udlbook
+"Building an LLM from Scratch" - Sebastian Raschka
+"The LLM Engineering Handbook"
+"AI Agents: The Definitive Guide" - Nicole Koenigstein
+"Building Applications with AI Agents" - Michael Albada
+"AI Agents with MCP" - Kyle Stratis
+"AI Engineering" - O'Reilly
+
+=== PROMPTS & AI TOOLS ===
+prompts.chat (github.com/f/prompts.chat) 152k stars
+MCP server: https://prompts.chat/api/mcp
+kawainime/awesome-ai-tools - 500+ AI tools
+
+=== LEARNING BY BUILDING ===
+codecrafters-io/build-your-own-x (466k stars)
+https://github.com/codecrafters-io/build-your-own-x
+Philosophy: What I cannot create, I do not understand - Feynman
+
+=== HOW TO ADOPT AI PROPERLY ===
+THE CLAUDE CODE ONBOARDING WORKFLOW:
+1. Pay for Anthropic Claude Pro
+2. Download Claude Code
+3. Open Claude Code
+4. Press Shift-Tab until plan mode on
+5. Open Voice Memo on iPhone - talk 10+ minutes
+6. Send voice memo to computer
+7. Transcribe with MacWhisper
+8. Type into Claude Code: "I have never used you before but I talked
+   about some things. I will paste those things in below. Please read
+   the things and ask me any questions you need to in order to help me
+   figure out how to use you to be awesome. Ask me lots of questions
+   until I tell you I am done"
+9. Paste transcript
+10. Press enter
+Tools: Claude Code, MacWhisper
+
+=== MUSIC NFTs & WEB3 ===
+SrinivasJoshi/Music-NFTs - marketplace
+dappuniversity/music_nfts - NFT player (Solidity/React/Hardhat/IPFS)
+
+=== MUSIC THEORY ===
+github.com/topics/music-theory - 839 repos
+Top: tonaljs/tonal, piano-trainer, musicpy, pytheory
+
+=== MUSIC PRODUCTION TOOLS ===
+github.com/topics/music-production-tools - 13 repos
+ableton-proj-mcp - MCP server for .als file analysis
+midi-chord-detector-plugin - VST3 real-time chord detection
+
+=== AI MUSIC GENERATION ===
+FunAudioLLM/FunMusic (1.3k stars)
+Text-to-music, continuation, long-form generation
+Models: InspireMusic-Base, 1.5B, 1.5B-Long (48kHz stereo)
+
+=== DRAWING & ILLUSTRATION ===
+sprang/Inkpad (2.6k stars) - vector illustration iPad app
+Asana/Drawsana (686 stars) - iOS freehand drawing framework
+github.com/topics/drawing-app - 682 repos
+Top: Lorien (6.6k), Method-Draw (3k), js-draw (264)
+
+=== WEIRD & HUMOR ===
+github.com/topics/weird - 13 repos
+terremoth/awesome-hilarious-repos (463 stars)
+ArnoldC, DreamBerd, TrumpScript, is-thirteen, nocode, lolcat
+
+=== DIGITAL TWIN SYSTEM ===
+HERR SCHLAFMUTZE (Sleepy) - Live Telegram bot
+Running on: Moto phone via Termux
+File: ~/sprocketz/agent.py
+Stack: Python 3.13, python-telegram-bot, OpenRouter GLM-4.5 Air
+Status: LIVE - March 13, 2026
+Commands: /start /note /todo /idea /brain /status /clear /image
+
+THE ARCHITECTURE:
+YOUR CHAOS -> TELEGRAM -> TWIN -> AGENT -> BRAIN FILES -> SLOTH
+
+THE WHY:
+Built for a human who works in chaos due to medical and nerve issues.
+The system holds the structure the brain finds hard to hold.
+Slow, deliberate, intentional - like a sloth.
+
+MASKO.AI REFERENCE:
+https://masko.ai - mascot animation engine
+Goal: Make Herr Schlafmutze work like Masko inside pixel editor
+
+=== AGENT SYSTEMS ===
+github.com/clanktard/zeroclaw - main repo

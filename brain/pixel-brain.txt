@@ -1,0 +1,99 @@
+PIXEL BRAIN v0.5 - Visual & Creative Reference
+Last Updated: March 13, 2026
+
+=== PIXEL ART TOOLS & EDITORS ===
+GottaYotta/PixelSDK (555 stars) - iOS Swift framework
+SUNSETTED Feb 2025 - study for architecture patterns only
+https://github.com/GottaYotta/PixelSDK
+
+triangledraw/TriangleDraw-iOS (62 stars)
+Free on App Store - trixel/isometric pixel editor iPad
+https://github.com/triangledraw/TriangleDraw-iOS
+
+Pixelorama (9.2k stars) - open source pixel art editor
+Web version exists but NOT iPad/touch ready
+https://github.com/Orama-Interactive/Pixelorama
+
+Novaboard - free browser pixel art editor + tools
+https://novaboard.app
+Tools: GIF<->spritesheet, dithering, palette extraction, outline
+
+=== AI IMAGE & VISUAL GENERATION ===
+THE TECHHALLA SPRITESHEET PIPELINE:
+Step 1 - Nano Banana 2 on Freepik Spaces (character generation)
+Step 2 - Multi-angle poses (same Freepik Space node workflow)
+Step 3 - Kling 3.0 animation (walk cycles, idles, attacks)
+Step 4 - Spritesheet assembly (custom app - check @techhalla)
+Platform: freepik.com/pikaso/spaces
+
+Nano Banana 2 - Google Gemini Flash Image model
+Now on Freepik - unlimited, bundled with Kling + Veo 3
+
+Kling 3.0 - video AI for sprite animation
+Available via Freepik suite
+
+Pixel Engine 1.1 - purpose-built sprite animator
+https://pixelengine.ai
+Free tier: 100 credits/month
+Web-based, works in iPad browser
+
+blendi-remade/sprite-sheet-creator
+https://github.com/blendi-remade/sprite-sheet-creator
+
+Scenario - AI spritesheet platform
+https://scenario.com
+
+=== PIXEL TUTOR SANDBOX ===
+File: pixel-tutor-sandbox.html (single file, no dependencies)
+Theme: Neon Underground (CRT, arcade-steampunk)
+Works on: any browser, any device
+
+AESTHETIC - LOCKED:
+Background:  #0a0a0f
+Primary:     #ff6b00
+Accent:      #00ff9f
+Metal:       #8b7355
+Glow:        #ff3300
+Vibe: Classic Arcade meets Steampunk Dystopia
+Opening: Cinematic CRT curtain reveal + spotlight
+Buttons: Chunky, raised, shadowed
+
+HERR SCHLAFMUTZE in sandbox:
+Draggable sloth tutor, upper right
+Swaying, blinking, slow German wisdom
+Goal: Upgrade to Masko.ai style 11+ animation states
+
+CANVAS: 32x32 grid, Apple Pencil ready, palm rejection
+TOOLBAR: Left column, link-tree expandable
+
+=== GENERATIVE ART ===
+cachilders/color-theory (3 stars)
+Max patch - sequences image pixels as MIDI music
+https://github.com/cachilders/color-theory
+
+=== INSPIRATION ===
+AC-bu - Japanese GIF manga pioneers since 1999
+http://ac-bu.info
+Kindolphin - GIF Manga Reader
+http://ac-bu.info/kindolphin/
+HAPPENING (2023) - GIF manga + music fusion
+
+Masko.ai - mascot animation engine reference
+https://masko.ai
+Upload image -> AI generates poses + animations
+11+ animation states per mascot
+
+=== ANIMATION CURRICULUM ===
+Source: pixelengine.ai/guides/animate
+Lesson 1: Prompts must be temporally dense + motion-focused
+Lesson 2: Starting pose is part of the prompt
+Lesson 3: Give characters canvas space to move
+Lesson 4: Frame counts matter (attacks 8-12, idle 4-8, walk 6-8)
+Lesson 5: 24 colors is the default sweet spot
+Lesson 6: Re-rolling 3-4 times is normal
+
+=== THE $0 IPAD PIPELINE ===
+Draw: Dotpict (free) or Pixaki ($19)
+Generate: Nano Banana 2 on Freepik (free)
+Animate: Pixel Engine 1.1 (free tier)
+Spritesheet: Novaboard Tools (free browser)
