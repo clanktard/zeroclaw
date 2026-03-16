@@ -1,6 +1,7 @@
 import os, json, logging, asyncio, time, subprocess, re
 import httpx
 from pel_code_engine import run_code_file, pel_code
+from pel_memory_engine import remember, recall, forget_all
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
@@ -20,7 +21,7 @@ If asked to speak out loud say OUT_LOUD: before the spoken words on a separate l
 PLANNER = """You are an expert AI agent planner. Think step by step. If scraping a website, consider if it uses JavaScript - if so find raw data sources like GitHub or APIs. Available actions: search, browse, write_file, read_file, shell, respond, code. Return ONLY valid JSON. Format: {"goal":"...","steps":[{"id":1,"action":"browse","input":"url","status":"pending"}]}"""
 
 CODER = """You are an expert Python developer. Write clean, working code.
-Return ONLY the code - no explanation, no markdown, no backticks.
+Return ONLY the code - no explanation, no markdown, no backticks. Never use triple-quoted f-strings. Use regular string concatenation instead.
 The code must be complete and runnable as a standalone script. Always use print() to show results. Never write code that produces no output."""
 
 logging.basicConfig(level=logging.INFO)
@@ -416,7 +417,11 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif msg.startswith('ping'):
         parts = msg.split()
         result = pel_ping(parts[1] if len(parts) > 1 else 'google.com')
-    elif msg.startswith('speak '):
+    elif msg.startswith("remember:"): result = remember(raw[9:].strip())
+    elif msg == "recall": result = recall()
+    elif msg.startswith("recall "): result = recall(msg[7:].strip())
+    elif msg == "forget all": result = forget_all()
+    elif msg.startswith("speak "):
         pel_speak(raw[6:])
         result = f'speaking: {raw[6:]}'
 
