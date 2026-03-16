@@ -454,5 +454,12 @@ app.add_handler(CommandHandler("help", cmd_help))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 print("Pel running...")
 set_state('idle')
-app.run_polling(drop_pending_updates=True)
+try:
+    app.run_polling(drop_pending_updates=True)
+except Exception as e:
+    import asyncio
+    from pel_self_repair import save_error, run_repair
+    save_error(str(e))
+    print(f"Crash: {e} - attempting self repair")
+    asyncio.run(run_repair())
 
