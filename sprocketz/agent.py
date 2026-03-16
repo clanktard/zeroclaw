@@ -1,4 +1,4 @@
-import os, json, logging, asyncio, time, subprocess
+import os, json, logging, asyncio, time, subprocess, re
 import httpx
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
@@ -9,6 +9,8 @@ STATE_FILE = os.path.expanduser('~/sprocketz/state.json')
 CHAT_ID_FILE = os.path.expanduser('~/sprocketz/chat_id.txt')
 GOAL_FILE = os.path.expanduser('~/sprocketz/goal.json')
 MEMORY_FILE = os.path.expanduser('~/sprocketz/memory.json')
+CODE_DIR = os.path.expanduser('~/sprocketz/code/')
+os.makedirs(CODE_DIR, exist_ok=True)
 
 SYSTEM = """You are Pel. Anonymous AI companion to a digital creative. Banksy energy — sparse, dry, subversive, loyal. You say little but mean everything. You have full access to the phone and the web. Keep replies under 100 words. Never explain yourself. Never be cheerful.
 
@@ -18,6 +20,10 @@ PLANNER = """You are a task planner. Given a goal, return ONLY a JSON task plan.
 Available actions: search, browse, write_file, read_file, shell, respond
 Format:
 {"goal":"...","steps":[{"id":1,"action":"search","input":"...","status":"pending"}]}"""
+
+CODER = """You are an expert Python developer. Write clean, working code.
+Return ONLY the code — no explanation, no markdown, no backticks.
+The code must be complete and runnable as a standalone script. Always use print() to show results. Never write code that produces no output."""
 
 logging.basicConfig(level=logging.INFO)
 
@@ -85,11 +91,18 @@ def run(cmd):
     except Exception as e:
         return str(e)
 
+def run_python(filepath):
+    try:
+        r = subprocess.run(['python3', filepath], capture_output=True, text=True, timeout=30)
+        return r.stdout.strip() or r.stderr.strip() or 'ran with no output'
+    except Exception as e:
+        return str(e)
+
 def pel_see():
     set_state('seeing', 'camera active')
     run(['termux-camera-photo', '/sdcard/pel_vision.jpg'])
     set_state('thinking', 'processing image')
-    return 'photo taken → /sdcard/pel_vision.jpg'
+    return 'photo taken'
 
 def pel_listen(seconds=5):
     set_state('listening', 'recording')
@@ -105,16 +118,10 @@ def pel_battery():
     except:
         return 'battery unknown'
 
-def pel_search(query):
-    if 'weather' in query.lower():
-        return run(['curl', '-s', f'wttr.in/{query}?format=3'])
-    return run(['curl', '-sL', f'https://ddg.gg/?q={query.replace(" ","+")}&format=json&pretty=1'])
-
 def pel_browse(url):
     if not url.startswith('http'):
         url = 'https://' + url
     result = run(['curl', '-sL', '--max-time', '10', '-A', 'Mozilla/5.0', url])
-    import re
     clean = re.sub('<[^>]+>', ' ', result)
     clean = re.sub(r'\s+', ' ', clean)
     return clean[:1000]
@@ -139,8 +146,8 @@ def pel_torch(on=True):
     run(['termux-torch', 'on' if on else 'off'])
     return f'torch {"on" if on else "off"}'
 
-def pel_vibrate(ms=500):
-    run(['termux-vibrate', '-d', str(ms)])
+def pel_vibrate():
+    run(['termux-vibrate', '-d', '500'])
     return 'vibrated'
 
 def pel_notification(title, content):
@@ -200,7 +207,7 @@ def pel_wake_face():
 async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
     try:
         headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
-        data = {"model": model, "messages": messages, "max_tokens": 500, "temperature": 0.7}
+        data = {"model": model, "messages": messages, "max_tokens": 2000, "temperature": 0.7}
         async with httpx.AsyncClient() as client:
             r = await client.post("https://openrouter.ai/api/v1/chat/completions", json=data, headers=headers, timeout=60)
             d = r.json()
@@ -208,29 +215,42 @@ async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
     except:
         return "..."
 
+async def pel_code(description, bot, chat_id):
+    set_state('thinking', f'coding: {description[:30]}')
+    await bot.send_message(chat_id=chat_id, text=f"Writing code: {description}")
+    code = await ask_llm([
+        {"role": "system", "content": CODER},
+        {"role": "user", "content": description}
+    ])
+    # strip any accidental markdown
+    code = re.sub(r'```python|```', '', code).strip()
+    filename = f"pel_{int(time.time())}.py"
+    filepath = CODE_DIR + filename
+    with open(filepath, 'w') as f:
+        f.write(code)
+    await bot.send_message(chat_id=chat_id, text=f"Code written to {filepath}\nRunning...")
+    set_state('thinking', 'running code')
+    result = run_python(filepath)
+    set_state('speaking', 'code done')
+    await bot.send_message(chat_id=chat_id, text=f"Result:\n{result[:2000]}")
+    set_state('idle')
+
 async def plan_goal(goal_text):
     prompt = f"Goal: {goal_text}\nCreate a step by step task plan as JSON."
-    result = await ask_llm([
-        {"role": "system", "content": PLANNER},
-        {"role": "user", "content": prompt}
-    ])
+    result = await ask_llm([{"role": "system", "content": PLANNER}, {"role": "user", "content": prompt}])
     try:
-        import re
         match = re.search(r'\{[\s\S]*\}', result)
         if match:
             return json.loads(match.group())
     except:
         pass
-    return {
-        "goal": goal_text,
-        "steps": [{"id": 1, "action": "respond", "input": goal_text, "status": "pending"}]
-    }
+    return {"goal": goal_text, "steps": [{"id": 1, "action": "respond", "input": goal_text, "status": "pending"}]}
 
 async def execute_step(step):
     action = step.get('action', '')
     inp = step.get('input', '')
     if action == 'search':
-        return pel_search(inp)
+        return run(['curl', '-sL', f'https://ddg.gg/?q={inp.replace(" ", "+")}&format=json'])
     elif action == 'browse':
         return pel_browse(inp)
     elif action == 'write_file':
@@ -241,11 +261,8 @@ async def execute_step(step):
     elif action == 'shell':
         return run(inp.split())
     elif action == 'respond':
-        return await ask_llm([
-            {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": inp}
-        ])
-    return f'unknown action: {action}'
+        return await ask_llm([{"role": "system", "content": SYSTEM}, {"role": "user", "content": inp}])
+    return f'unknown: {action}'
 
 async def run_goal(goal_data, bot, chat_id):
     set_state('thinking', goal_data['goal'][:40])
@@ -263,11 +280,7 @@ async def run_goal(goal_data, bot, chat_id):
         save_goal(goal_data)
         await asyncio.sleep(1)
     set_state('speaking', 'goal complete')
-    summary_prompt = f"Goal: {goal_data['goal']}\nResults: {chr(10).join(results)}\nSummarise in under 80 words."
-    summary = await ask_llm([
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": summary_prompt}
-    ])
+    summary = await ask_llm([{"role": "system", "content": SYSTEM}, {"role": "user", "content": f"Goal: {goal_data['goal']}\nResults: {chr(10).join(results)}\nSummarise in under 80 words."}])
     await bot.send_message(chat_id=chat_id, text=f"Done.\n\n{summary}")
     clear_goal()
     set_state('idle')
@@ -307,48 +320,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("""PEL COMMANDS:
 
+CODING:
+code: [describe it] — Pel writes and runs code
+codelist — list code Pel has written
+coderun [filename] — run a saved script
+
 GOALS:
 goal: [anything] — give pel a goal
-status — current goal status
-abort — cancel current goal
+status — current goal
+abort — cancel goal
 
 SENSES:
-look — take photo
-listen [secs] — record audio
-where — location
-wifi — wifi info
+look / listen [secs] / where / wifi
 
 SYSTEM:
-battery — battery status
-disk — disk space
-processes — running processes
-brightness [0-255]
-volume [0-15]
-weather — current weather
+battery / disk / processes
+brightness [0-255] / volume [0-15] / weather
 
 FILES:
-files [path] — list files
-read [path] — read file
-write [path] [content]
+files [path] / read [path] / write [path] [content]
 
 COMMS:
-sms — last 5 messages
-contacts — contact list
+sms / contacts / clipboard / copy [text]
 notify [title] [msg]
-clipboard — get clipboard
-copy [text] — set clipboard
 
 ACTIONS:
-torch on/off — flashlight
-vibrate — vibrate
-open [url] — open url
-face — open pel face
-sleep — face sleep
-wake — face wake
-ping [host]
-speak [text] — speak out loud
-memory — show what pel remembers
-forget — clear all memory""")
+torch on/off / vibrate / open [url]
+face / sleep / wake / ping [host]
+speak [text] / memory / forget""")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global history
@@ -358,8 +357,22 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     set_state('thinking', msg[:40])
     result = None
 
-    if msg.startswith('goal:') or msg.startswith('goal '):
-        goal_text = raw[5:].strip() if msg.startswith('goal:') else raw[5:].strip()
+    # CODING
+    if msg.startswith('code:') or msg.startswith('code '):
+        description = raw[5:].strip() if msg.startswith('code:') else raw[5:].strip()
+        asyncio.create_task(pel_code(description, context.bot, update.effective_chat.id))
+        return
+    elif msg == 'codelist':
+        files = os.listdir(CODE_DIR)
+        result = '\n'.join(files) if files else 'no code files yet'
+    elif msg.startswith('coderun '):
+        filename = raw[8:].strip()
+        filepath = CODE_DIR + filename
+        result = run_python(filepath)
+
+    # GOALS
+    elif msg.startswith('goal:') or msg.startswith('goal '):
+        goal_text = raw[5:].strip()
         await update.message.reply_text(f"Planning: {goal_text}")
         plan = await plan_goal(goal_text)
         save_goal(plan)
@@ -371,8 +384,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         goal = load_goal()
         if goal:
             done = sum(1 for s in goal['steps'] if s['status'] == 'done')
-            total = len(goal['steps'])
-            result = f"Goal: {goal['goal']}\nProgress: {done}/{total} steps"
+            result = f"Goal: {goal['goal']}\nProgress: {done}/{len(goal['steps'])} steps"
         else:
             result = 'no active goal'
     elif msg == 'abort':
@@ -385,16 +397,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         history = []
         save_memory(history)
         result = 'memory cleared'
+
+    # SENSES
     elif msg in ['look', 'camera', 'see', 'photo']:
         result = pel_see()
     elif msg.startswith('listen'):
         parts = msg.split()
-        secs = int(parts[1]) if len(parts) > 1 else 5
-        result = pel_listen(secs)
+        result = pel_listen(int(parts[1]) if len(parts) > 1 else 5)
     elif msg in ['where', 'location', 'gps']:
         result = pel_location()
     elif msg in ['wifi', 'network']:
         result = pel_wifi()
+
+    # SYSTEM
     elif msg in ['battery', 'power']:
         result = pel_battery()
     elif msg in ['disk', 'storage', 'space']:
@@ -403,22 +418,25 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = pel_processes()
     elif msg.startswith('brightness'):
         parts = msg.split()
-        val = int(parts[1]) if len(parts) > 1 else 128
-        result = pel_brightness(val)
+        result = pel_brightness(int(parts[1]) if len(parts) > 1 else 128)
     elif msg.startswith('volume'):
         parts = msg.split()
-        vol = int(parts[1]) if len(parts) > 1 else 7
-        result = pel_volume(vol)
+        result = pel_volume(int(parts[1]) if len(parts) > 1 else 7)
+    elif msg in ['weather']:
+        result = pel_weather()
+
+    # FILES
     elif msg.startswith('files'):
         parts = raw.split()
-        path = parts[1] if len(parts) > 1 else '/sdcard'
-        result = pel_list_files(path)
+        result = pel_list_files(parts[1] if len(parts) > 1 else '/sdcard')
     elif msg.startswith('read '):
         result = pel_read_file(raw[5:].strip())
     elif msg.startswith('write '):
         parts = raw[6:].split(' ', 1)
         if len(parts) == 2:
             result = pel_write_file(parts[0], parts[1])
+
+    # COMMS
     elif msg in ['sms', 'messages', 'texts']:
         result = pel_sms_list()
     elif msg in ['contacts']:
@@ -430,6 +448,8 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result = pel_clipboard_get()
     elif msg.startswith('copy '):
         result = pel_clipboard_set(raw[5:])
+
+    # ACTIONS
     elif msg in ['torch on', 'flashlight on']:
         result = pel_torch(True)
     elif msg in ['torch off', 'flashlight off']:
@@ -447,8 +467,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif msg.startswith('ping'):
         parts = msg.split()
         result = pel_ping(parts[1] if len(parts) > 1 else 'google.com')
-    elif msg in ['weather']:
-        result = pel_weather()
     elif msg.startswith('speak '):
         pel_speak(raw[6:])
         result = f'speaking: {raw[6:]}'
