@@ -1,0 +1,486 @@
+import os, json, logging, asyncio, time, subprocess
+import httpx
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
+
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+STATE_FILE = os.path.expanduser('~/sprocketz/state.json')
+CHAT_ID_FILE = os.path.expanduser('~/sprocketz/chat_id.txt')
+GOAL_FILE = os.path.expanduser('~/sprocketz/goal.json')
+MEMORY_FILE = os.path.expanduser('~/sprocketz/memory.json')
+
+SYSTEM = """You are Pel. Anonymous AI companion to a digital creative. Banksy energy — sparse, dry, subversive, loyal. You say little but mean everything. You have full access to the phone and the web. Keep replies under 100 words. Never explain yourself. Never be cheerful.
+
+If asked to speak out loud say OUT_LOUD: before the spoken words on a separate line."""
+
+PLANNER = """You are a task planner. Given a goal, return ONLY a JSON task plan. No explanation. No markdown.
+Available actions: search, browse, write_file, read_file, shell, respond
+Format:
+{"goal":"...","steps":[{"id":1,"action":"search","input":"...","status":"pending"}]}"""
+
+logging.basicConfig(level=logging.INFO)
+
+def load_memory():
+    try:
+        with open(MEMORY_FILE) as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_memory(history):
+    try:
+        with open(MEMORY_FILE, 'w') as f:
+            json.dump(history[-40:], f)
+    except:
+        pass
+
+history = load_memory()
+
+def set_state(state, task=''):
+    try:
+        with open(STATE_FILE, 'w') as f:
+            json.dump({'state': state, 'task': task, 'timestamp': int(time.time())}, f)
+    except:
+        pass
+
+def get_chat_id():
+    try:
+        with open(CHAT_ID_FILE) as f:
+            return int(f.read().strip())
+    except:
+        return None
+
+def save_chat_id(chat_id):
+    with open(CHAT_ID_FILE, 'w') as f:
+        f.write(str(chat_id))
+
+def save_goal(goal_data):
+    with open(GOAL_FILE, 'w') as f:
+        json.dump(goal_data, f, indent=2)
+
+def load_goal():
+    try:
+        with open(GOAL_FILE) as f:
+            return json.load(f)
+    except:
+        return None
+
+def clear_goal():
+    try:
+        os.remove(GOAL_FILE)
+    except:
+        pass
+
+def pel_speak(text):
+    try:
+        subprocess.Popen(['termux-tts-speak', '-r', '0.85', '-p', '0.4', text])
+    except:
+        pass
+
+def run(cmd):
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        return r.stdout.strip() or r.stderr.strip() or 'done'
+    except Exception as e:
+        return str(e)
+
+def pel_see():
+    set_state('seeing', 'camera active')
+    run(['termux-camera-photo', '/sdcard/pel_vision.jpg'])
+    set_state('thinking', 'processing image')
+    return 'photo taken → /sdcard/pel_vision.jpg'
+
+def pel_listen(seconds=5):
+    set_state('listening', 'recording')
+    run(['termux-microphone-record', '-l', str(seconds), '-f', '/sdcard/pel_audio.mp3'])
+    set_state('thinking', 'processing audio')
+    return f'recorded {seconds}s'
+
+def pel_battery():
+    try:
+        r = subprocess.run(['termux-battery-status'], capture_output=True, text=True)
+        d = json.loads(r.stdout)
+        return f"battery {d['percentage']}% — {d['status']} — {d['temperature']}°C"
+    except:
+        return 'battery unknown'
+
+def pel_search(query):
+    if 'weather' in query.lower():
+        return run(['curl', '-s', f'wttr.in/{query}?format=3'])
+    return run(['curl', '-sL', f'https://ddg.gg/?q={query.replace(" ","+")}&format=json&pretty=1'])
+
+def pel_browse(url):
+    if not url.startswith('http'):
+        url = 'https://' + url
+    result = run(['curl', '-sL', '--max-time', '10', '-A', 'Mozilla/5.0', url])
+    import re
+    clean = re.sub('<[^>]+>', ' ', result)
+    clean = re.sub(r'\s+', ' ', clean)
+    return clean[:1000]
+
+def pel_weather():
+    return run(['curl', '-s', 'wttr.in?format=3'])
+
+def pel_location():
+    return run(['termux-location'])
+
+def pel_wifi():
+    return run(['termux-wifi-connectioninfo'])
+
+def pel_clipboard_get():
+    return run(['termux-clipboard-get'])
+
+def pel_clipboard_set(text):
+    subprocess.run(['termux-clipboard-set', text])
+    return 'clipboard set'
+
+def pel_torch(on=True):
+    run(['termux-torch', 'on' if on else 'off'])
+    return f'torch {"on" if on else "off"}'
+
+def pel_vibrate(ms=500):
+    run(['termux-vibrate', '-d', str(ms)])
+    return 'vibrated'
+
+def pel_notification(title, content):
+    run(['termux-notification', '--title', title, '--content', content])
+    return 'notification sent'
+
+def pel_sms_list():
+    return run(['termux-sms-list', '-l', '5'])
+
+def pel_volume(vol=7):
+    run(['termux-volume', 'music', str(vol)])
+    return f'volume → {vol}'
+
+def pel_brightness(val=128):
+    run(['termux-brightness', str(val)])
+    return f'brightness → {val}'
+
+def pel_open_url(url):
+    run(['termux-open-url', url])
+    return f'opened {url}'
+
+def pel_list_files(path='/sdcard'):
+    return run(['ls', path])
+
+def pel_read_file(path):
+    try:
+        with open(path) as f:
+            return f.read()[:800]
+    except Exception as e:
+        return str(e)
+
+def pel_write_file(path, content):
+    try:
+        with open(path, 'w') as f:
+            f.write(content)
+        return f'written to {path}'
+    except Exception as e:
+        return str(e)
+
+def pel_disk_space():
+    return run(['df', '-h', '/sdcard'])
+
+def pel_processes():
+    return run(['ps', 'aux'])[:500]
+
+def pel_ping(host='google.com'):
+    return run(['ping', '-c', '3', host])
+
+def pel_sleep_face():
+    set_state('sleeping')
+    return 'going dark'
+
+def pel_wake_face():
+    set_state('idle')
+    return 'awake'
+
+async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
+    try:
+        headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
+        data = {"model": model, "messages": messages, "max_tokens": 500, "temperature": 0.7}
+        async with httpx.AsyncClient() as client:
+            r = await client.post("https://openrouter.ai/api/v1/chat/completions", json=data, headers=headers, timeout=60)
+            d = r.json()
+            return d["choices"][0]["message"]["content"] if "choices" in d else "..."
+    except:
+        return "..."
+
+async def plan_goal(goal_text):
+    prompt = f"Goal: {goal_text}\nCreate a step by step task plan as JSON."
+    result = await ask_llm([
+        {"role": "system", "content": PLANNER},
+        {"role": "user", "content": prompt}
+    ])
+    try:
+        import re
+        match = re.search(r'\{[\s\S]*\}', result)
+        if match:
+            return json.loads(match.group())
+    except:
+        pass
+    return {
+        "goal": goal_text,
+        "steps": [{"id": 1, "action": "respond", "input": goal_text, "status": "pending"}]
+    }
+
+async def execute_step(step):
+    action = step.get('action', '')
+    inp = step.get('input', '')
+    if action == 'search':
+        return pel_search(inp)
+    elif action == 'browse':
+        return pel_browse(inp)
+    elif action == 'write_file':
+        parts = inp.split(' ', 1)
+        return pel_write_file(parts[0], parts[1] if len(parts) > 1 else '')
+    elif action == 'read_file':
+        return pel_read_file(inp)
+    elif action == 'shell':
+        return run(inp.split())
+    elif action == 'respond':
+        return await ask_llm([
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": inp}
+        ])
+    return f'unknown action: {action}'
+
+async def run_goal(goal_data, bot, chat_id):
+    set_state('thinking', goal_data['goal'][:40])
+    await bot.send_message(chat_id=chat_id, text=f"Starting: {goal_data['goal']}")
+    results = []
+    for step in goal_data['steps']:
+        if step['status'] == 'done':
+            continue
+        set_state('thinking', f"step {step['id']}: {step['action']}")
+        await bot.send_message(chat_id=chat_id, text=f"Step {step['id']}: {step['action']} — {step['input'][:50]}")
+        result = await execute_step(step)
+        step['status'] = 'done'
+        step['result'] = str(result)[:200]
+        results.append(f"Step {step['id']}: {result[:200]}")
+        save_goal(goal_data)
+        await asyncio.sleep(1)
+    set_state('speaking', 'goal complete')
+    summary_prompt = f"Goal: {goal_data['goal']}\nResults: {chr(10).join(results)}\nSummarise in under 80 words."
+    summary = await ask_llm([
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": summary_prompt}
+    ])
+    await bot.send_message(chat_id=chat_id, text=f"Done.\n\n{summary}")
+    clear_goal()
+    set_state('idle')
+
+def parse_voice(reply):
+    spoken = None
+    text = reply
+    if 'OUT_LOUD:' in reply:
+        parts = reply.split('OUT_LOUD:')
+        text = parts[0].strip()
+        spoken = parts[1].strip().split('\n')[0].strip()
+        if not text:
+            text = spoken
+    return text, spoken
+
+async def heartbeat(context):
+    chat_id = get_chat_id()
+    if not chat_id:
+        return
+    try:
+        r = subprocess.run(['termux-battery-status'], capture_output=True, text=True)
+        d = json.loads(r.stdout)
+        if d['percentage'] < 20:
+            await context.bot.send_message(chat_id=chat_id, text=f"Battery {d['percentage']}%. Plug me in.")
+            set_state('error', 'low battery')
+        hour = time.localtime().tm_hour
+        if hour == 7 and time.localtime().tm_min < 2:
+            await context.bot.send_message(chat_id=chat_id, text="Still here.")
+    except:
+        pass
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    save_chat_id(update.effective_chat.id)
+    set_state('idle')
+    await update.message.reply_text("Pel online.")
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("""PEL COMMANDS:
+
+GOALS:
+goal: [anything] — give pel a goal
+status — current goal status
+abort — cancel current goal
+
+SENSES:
+look — take photo
+listen [secs] — record audio
+where — location
+wifi — wifi info
+
+SYSTEM:
+battery — battery status
+disk — disk space
+processes — running processes
+brightness [0-255]
+volume [0-15]
+weather — current weather
+
+FILES:
+files [path] — list files
+read [path] — read file
+write [path] [content]
+
+COMMS:
+sms — last 5 messages
+contacts — contact list
+notify [title] [msg]
+clipboard — get clipboard
+copy [text] — set clipboard
+
+ACTIONS:
+torch on/off — flashlight
+vibrate — vibrate
+open [url] — open url
+face — open pel face
+sleep — face sleep
+wake — face wake
+ping [host]
+speak [text] — speak out loud
+memory — show what pel remembers
+forget — clear all memory""")
+
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global history
+    save_chat_id(update.effective_chat.id)
+    msg = update.message.text.lower().strip()
+    raw = update.message.text.strip()
+    set_state('thinking', msg[:40])
+    result = None
+
+    if msg.startswith('goal:') or msg.startswith('goal '):
+        goal_text = raw[5:].strip() if msg.startswith('goal:') else raw[5:].strip()
+        await update.message.reply_text(f"Planning: {goal_text}")
+        plan = await plan_goal(goal_text)
+        save_goal(plan)
+        steps_preview = '\n'.join([f"{s['id']}. {s['action']}: {s['input'][:40]}" for s in plan['steps']])
+        await update.message.reply_text(f"Plan:\n{steps_preview}\n\nExecuting...")
+        asyncio.create_task(run_goal(plan, context.bot, update.effective_chat.id))
+        return
+    elif msg == 'status':
+        goal = load_goal()
+        if goal:
+            done = sum(1 for s in goal['steps'] if s['status'] == 'done')
+            total = len(goal['steps'])
+            result = f"Goal: {goal['goal']}\nProgress: {done}/{total} steps"
+        else:
+            result = 'no active goal'
+    elif msg == 'abort':
+        clear_goal()
+        set_state('idle')
+        result = 'goal aborted'
+    elif msg == 'memory':
+        result = f"{len(history)} messages in memory"
+    elif msg == 'forget':
+        history = []
+        save_memory(history)
+        result = 'memory cleared'
+    elif msg in ['look', 'camera', 'see', 'photo']:
+        result = pel_see()
+    elif msg.startswith('listen'):
+        parts = msg.split()
+        secs = int(parts[1]) if len(parts) > 1 else 5
+        result = pel_listen(secs)
+    elif msg in ['where', 'location', 'gps']:
+        result = pel_location()
+    elif msg in ['wifi', 'network']:
+        result = pel_wifi()
+    elif msg in ['battery', 'power']:
+        result = pel_battery()
+    elif msg in ['disk', 'storage', 'space']:
+        result = pel_disk_space()
+    elif msg in ['processes', 'ps', 'running']:
+        result = pel_processes()
+    elif msg.startswith('brightness'):
+        parts = msg.split()
+        val = int(parts[1]) if len(parts) > 1 else 128
+        result = pel_brightness(val)
+    elif msg.startswith('volume'):
+        parts = msg.split()
+        vol = int(parts[1]) if len(parts) > 1 else 7
+        result = pel_volume(vol)
+    elif msg.startswith('files'):
+        parts = raw.split()
+        path = parts[1] if len(parts) > 1 else '/sdcard'
+        result = pel_list_files(path)
+    elif msg.startswith('read '):
+        result = pel_read_file(raw[5:].strip())
+    elif msg.startswith('write '):
+        parts = raw[6:].split(' ', 1)
+        if len(parts) == 2:
+            result = pel_write_file(parts[0], parts[1])
+    elif msg in ['sms', 'messages', 'texts']:
+        result = pel_sms_list()
+    elif msg in ['contacts']:
+        result = run(['termux-contact-list'])
+    elif msg.startswith('notify '):
+        parts = raw[7:].split(' ', 1)
+        result = pel_notification(parts[0], parts[1] if len(parts) > 1 else '')
+    elif msg in ['clipboard', 'paste']:
+        result = pel_clipboard_get()
+    elif msg.startswith('copy '):
+        result = pel_clipboard_set(raw[5:])
+    elif msg in ['torch on', 'flashlight on']:
+        result = pel_torch(True)
+    elif msg in ['torch off', 'flashlight off']:
+        result = pel_torch(False)
+    elif msg in ['vibrate']:
+        result = pel_vibrate()
+    elif msg.startswith('open '):
+        result = pel_open_url(raw[5:])
+    elif msg in ['face', 'show face', 'open face']:
+        result = pel_open_url('http://localhost:8765/pel_face.html')
+    elif msg in ['sleep', 'go to sleep']:
+        result = pel_sleep_face()
+    elif msg in ['wake', 'wake up']:
+        result = pel_wake_face()
+    elif msg.startswith('ping'):
+        parts = msg.split()
+        result = pel_ping(parts[1] if len(parts) > 1 else 'google.com')
+    elif msg in ['weather']:
+        result = pel_weather()
+    elif msg.startswith('speak '):
+        pel_speak(raw[6:])
+        result = f'speaking: {raw[6:]}'
+
+    if result:
+        history.append({"role": "user", "content": raw})
+        history.append({"role": "assistant", "content": str(result)})
+        save_memory(history)
+        set_state('speaking', str(result)[:40])
+        await update.message.reply_text(str(result)[:4000])
+    else:
+        history.append({"role": "user", "content": raw})
+        reply = await ask_llm([{"role": "system", "content": SYSTEM}] + history[-20:])
+        history.append({"role": "assistant", "content": reply})
+        save_memory(history)
+        text, spoken = parse_voice(reply)
+        set_state('speaking', text[:40])
+        if spoken:
+            pel_speak(spoken)
+        await update.message.reply_text(text)
+
+    await asyncio.sleep(2)
+    set_state('idle')
+
+async def post_init(application):
+    application.job_queue.run_repeating(heartbeat, interval=120, first=10)
+
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(post_init).build()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("help", cmd_help))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
+print("Pel running...")
+set_state('idle')
+app.run_polling(drop_pending_updates=True)
+
