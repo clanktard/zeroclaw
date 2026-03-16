@@ -1,6 +1,8 @@
 import os, json, logging, asyncio, time, subprocess, re
 import httpx
 from pel_code_engine import run_code_file, pel_code
+from pel_scheduler import start_scheduler
+from pel_autowire import autowire
 from pel_memory_engine import remember, recall, forget_all
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
@@ -453,6 +455,7 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", cmd_help))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 print("Pel running...")
+start_scheduler()
 set_state('idle')
 try:
     app.run_polling(drop_pending_updates=True)

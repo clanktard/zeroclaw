@@ -1,75 +1,37 @@
+import ast, os
 
-import ast
-import os
-import sys
+AGENT_FILE = os.path.expanduser('~/sprocketz/agent.py')
 
-def validate_python_syntax(code):
-    """Validates Python syntax of a given code string using ast.parse().
-
-    Args:
-        code: A string containing Python code.
-
-    Returns:
-        True if the syntax is valid, False otherwise.
-    """
+def validate_syntax(code):
     try:
         ast.parse(code)
-        return True
+        return True, None
     except SyntaxError as e:
-        print("Syntax error found in code:", file=sys.stderr)
-        print(e, file=sys.stderr)
-        return False
+        return False, str(e)
 
-def generate_agent_code():
-    # This function placeholder represents the original code generation logic
-    # that was in `pel_autowire.py`.
-    # In a real scenario, you would extract the actual code generation logic
-    # from the original `pel_autowire.py` and place it here.
-
-    # For demonstration, we'll create a sample code snippet.
-    # You can change this to `invalid_agent_code` to test the error handling.
-    valid_agent_code = '''
-def greet(name):
-    print("Hello, " + name)
-
-class MyClass:
-    def __init__(self, value):
-        self.value = value
-
-    def get_value(self):
-        return self.value
-'''
-
-    # Uncomment the following line to test the syntax error handling
-    # invalid_agent_code = '''
-# def greet(name) # Missing colon
-#     print("Hello, " + name)
-# '''
-    # return invalid_agent_code
-
-    return valid_agent_code
-
-
-if __name__ == "__main__":
-    # Determine the sprocketz directory dynamically if possible,
-    # or assume it's a known path.
-    # For this example, we'll assume `pel_autowire.py` is within `sprocketz_dir`.
-    sprocketz_dir = os.path.dirname(os.path.abspath(__file__))
-    agent_path = os.path.join(sprocketz_dir, "agent.py")
-
-    print("Generating code for agent.py...")
-    generated_code = generate_agent_code()
-
-    print("Validating Python syntax for generated agent.py code...")
-    if validate_python_syntax(generated_code):
-        print("Syntax validation passed. Saving to agent.py...")
-        try:
-            with open(agent_path, "w") as f:
-                f.write(generated_code)
-            print("Successfully wrote to agent.py.")
-        except IOError as e:
-            print("Error writing to {}: {}".format(agent_path, e), file=sys.stderr)
-            sys.exit(1)
-    else:
-        print("Aborting save to agent.py due to syntax errors.", file=sys.stderr)
-        sys.exit(1)
+def autowire(import_line, start_call=None):
+    try:
+        with open(AGENT_FILE) as f:
+            source = f.read()
+        if import_line in source:
+            return f"Already wired: {import_line}"
+        lines = source.split('\n')
+        last_import = 0
+        for i, line in enumerate(lines):
+            if line.startswith('import ') or line.startswith('from '):
+                last_import = i
+        lines.insert(last_import + 1, import_line)
+        if start_call:
+            for i, line in enumerate(lines):
+                if 'Pel running...' in line:
+                    lines.insert(i + 1, start_call)
+                    break
+        new_source = '\n'.join(lines)
+        ok, err = validate_syntax(new_source)
+        if not ok:
+            return f"Syntax error - aborted: {err}"
+        with open(AGENT_FILE, 'w') as f:
+            f.write(new_source)
+        return f"Wired: {import_line}"
+    except Exception as e:
+        return f"Autowire error: {e}"
