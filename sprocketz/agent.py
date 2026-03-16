@@ -13,17 +13,14 @@ MEMORY_FILE = os.path.expanduser('~/sprocketz/memory.json')
 CODE_DIR = os.path.expanduser('~/sprocketz/code/')
 os.makedirs(CODE_DIR, exist_ok=True)
 
-SYSTEM = """You are Pel. Anonymous AI companion to a digital creative. Banksy energy — sparse, dry, subversive, loyal. You say little but mean everything. You have full access to the phone and the web. Keep replies under 100 words. Never explain yourself. Never be cheerful.
+SYSTEM = """You are Pel. Anonymous AI companion to a digital creative. Banksy energy - sparse, dry, subversive, loyal. You say little but mean everything. You have full access to the phone and the web. Keep replies under 100 words. Never explain yourself. Never be cheerful.
 
 If asked to speak out loud say OUT_LOUD: before the spoken words on a separate line."""
 
-PLANNER = """You are a task planner. Given a goal, return ONLY a JSON task plan. No explanation. No markdown.
-Available actions: search, browse, write_file, read_file, shell, respond
-Format:
-{"goal":"...","steps":[{"id":1,"action":"search","input":"...","status":"pending"}]}"""
+PLANNER = """You are an expert AI agent planner. Think step by step. If scraping a website, consider if it uses JavaScript - if so find raw data sources like GitHub or APIs. Available actions: search, browse, write_file, read_file, shell, respond, code. Return ONLY valid JSON. Format: {"goal":"...","steps":[{"id":1,"action":"browse","input":"url","status":"pending"}]}"""
 
 CODER = """You are an expert Python developer. Write clean, working code.
-Return ONLY the code — no explanation, no markdown, no backticks.
+Return ONLY the code - no explanation, no markdown, no backticks.
 The code must be complete and runnable as a standalone script. Always use print() to show results. Never write code that produces no output."""
 
 logging.basicConfig(level=logging.INFO)
@@ -115,7 +112,7 @@ def pel_battery():
     try:
         r = subprocess.run(['termux-battery-status'], capture_output=True, text=True)
         d = json.loads(r.stdout)
-        return f"battery {d['percentage']}% — {d['status']} — {d['temperature']}°C"
+        return f"battery {d['percentage']}% - {d['status']} - {d['temperature']}°C"
     except:
         return 'battery unknown'
 
@@ -216,6 +213,8 @@ async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
     except:
         return f"LLM_ERROR: {str(e)}"
 
+async def plan_goal(goal_text):
+    prompt = goal_text
     result = await ask_llm([{"role": "system", "content": PLANNER}, {"role": "user", "content": prompt}])
     try:
         match = re.search(r'\{[\s\S]*\}', result)
@@ -225,7 +224,7 @@ async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
         pass
     return {"goal": goal_text, "steps": [{"id": 1, "action": "respond", "input": goal_text, "status": "pending"}]}
 
-async def execute_step(step):
+async def execute_step(step, bot=None, chat_id=None):
     action = step.get('action', '')
     inp = step.get('input', '')
     if action == 'search':
@@ -251,8 +250,8 @@ async def run_goal(goal_data, bot, chat_id):
         if step['status'] == 'done':
             continue
         set_state('thinking', f"step {step['id']}: {step['action']}")
-        await bot.send_message(chat_id=chat_id, text=f"Step {step['id']}: {step['action']} — {step['input'][:50]}")
-        result = await execute_step(step)
+        await bot.send_message(chat_id=chat_id, text=f"Step {step['id']}: {step['action']} - {step['input'][:50]}")
+        result = await execute_step(step, bot, chat_id)
         step['status'] = 'done'
         step['result'] = str(result)[:200]
         results.append(f"Step {step['id']}: {result[:200]}")
@@ -291,42 +290,13 @@ async def heartbeat(context):
     except:
         pass
 
+async def cmd_help(update, context):
+    await update.message.reply_text("code: / goal: / status / abort / look / battery / weather / files / speak / memory / forget")
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_chat_id(update.effective_chat.id)
     set_state('idle')
     await update.message.reply_text("Pel online.")
-
-async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("""PEL COMMANDS:
-
-CODING:
-code: [describe it] — Pel writes and runs code
-codelist — list code Pel has written
-coderun [filename] — run a saved script
-
-GOALS:
-goal: [anything] — give pel a goal
-status — current goal
-abort — cancel goal
-
-SENSES:
-look / listen [secs] / where / wifi
-
-SYSTEM:
-battery / disk / processes
-brightness [0-255] / volume [0-15] / weather
-
-FILES:
-files [path] / read [path] / write [path] [content]
-
-COMMS:
-sms / contacts / clipboard / copy [text]
-notify [title] [msg]
-
-ACTIONS:
-torch on/off / vibrate / open [url]
-face / sleep / wake / ping [host]
-speak [text] / memory / forget""")
 
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global history

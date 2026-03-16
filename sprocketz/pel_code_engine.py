@@ -26,7 +26,7 @@ async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
     messages = [{"role":"user","content":f"{CODER}\n\nWrite code to: {description}"}]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     success, filepath, output = False, None, ''
-    for i in range(1, 6):
+    for i in range(1, 11):
         await bot.send_message(chat_id=chat_id, text=f"⚙️ Pass {i}/5...")
         await asyncio.sleep(3)
         response = await ask_llm(messages, model="openrouter/auto")
