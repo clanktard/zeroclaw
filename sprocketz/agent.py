@@ -1,5 +1,6 @@
 import os, json, logging, asyncio, time, subprocess, re
 import httpx
+from pel_code_engine import run_code_file, pel_code
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, filters, ContextTypes
 
@@ -215,28 +216,6 @@ async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
     except:
         return "..."
 
-async def pel_code(description, bot, chat_id):
-    set_state('thinking', f'coding: {description[:30]}')
-    await bot.send_message(chat_id=chat_id, text=f"Writing code: {description}")
-    code = await ask_llm([
-        {"role": "system", "content": CODER},
-        {"role": "user", "content": description}
-    ])
-    # strip any accidental markdown
-    code = re.sub(r'```python|```', '', code).strip()
-    filename = f"pel_{int(time.time())}.py"
-    filepath = CODE_DIR + filename
-    with open(filepath, 'w') as f:
-        f.write(code)
-    await bot.send_message(chat_id=chat_id, text=f"Code written to {filepath}\nRunning...")
-    set_state('thinking', 'running code')
-    result = run_python(filepath)
-    set_state('speaking', 'code done')
-    await bot.send_message(chat_id=chat_id, text=f"Result:\n{result[:2000]}")
-    set_state('idle')
-
-async def plan_goal(goal_text):
-    prompt = f"Goal: {goal_text}\nCreate a step by step task plan as JSON."
     result = await ask_llm([{"role": "system", "content": PLANNER}, {"role": "user", "content": prompt}])
     try:
         match = re.search(r'\{[\s\S]*\}', result)
@@ -360,7 +339,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # CODING
     if msg.startswith('code:') or msg.startswith('code '):
         description = raw[5:].strip() if msg.startswith('code:') else raw[5:].strip()
-        asyncio.create_task(pel_code(description, context.bot, update.effective_chat.id))
+        asyncio.create_task(pel_code(description, context.bot, update.effective_chat.id, ask_llm, SYSTEM, CODER))
         return
     elif msg == 'codelist':
         files = os.listdir(CODE_DIR)
