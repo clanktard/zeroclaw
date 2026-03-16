@@ -1,4 +1,4 @@
-import os, re, subprocess
+import os, re, subprocess, asyncio
 from datetime import datetime
 
 CODE_DIR = os.path.expanduser('~/sprocketz/code/')
@@ -23,12 +23,13 @@ def get_ext(lang):
 
 async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
     await bot.send_message(chat_id=chat_id, text=f"🧠 On it: {description}")
-    messages = [{"role":"system","content":CODER},{"role":"user","content":f"Write code to: {description}"}]
+    messages = [{"role":"user","content":f"{CODER}\n\nWrite code to: {description}"}]
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     success, filepath, output = False, None, ''
     for i in range(1, 6):
         await bot.send_message(chat_id=chat_id, text=f"⚙️ Pass {i}/5...")
-        response = await ask_llm(messages, model="deepseek/deepseek-r1:free")
+        await asyncio.sleep(3)
+        response = await ask_llm(messages, model="openrouter/auto")
         language, code = extract_code_block(response)
         print(f"DEBUG lang={language} code_len={len(code)} preview={repr(code[:100])}")
         filepath = os.path.join(CODE_DIR, f"pel_{timestamp}{get_ext(language)}")
@@ -44,5 +45,5 @@ async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
     if not success:
         await bot.send_message(chat_id=chat_id, text=f"💀 Failed after 5.\n{output[:400]}")
         return
-    summary = await ask_llm([{"role":"system","content":SYSTEM},{"role":"user","content":f"One dry Banksy sentence: {description}"}])
+    summary = await ask_llm([{"role":"user","content":f"One dry Banksy sentence about what this code does: {description}"}], model="openrouter/auto")
     await bot.send_message(chat_id=chat_id, text=f"🎨 {summary}\n\n📁 code/{os.path.basename(filepath)}")

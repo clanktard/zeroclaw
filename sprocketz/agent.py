@@ -214,7 +214,7 @@ async def ask_llm(messages, model='deepseek/deepseek-r1:free'):
             d = r.json()
             return d["choices"][0]["message"]["content"] if "choices" in d else "..."
     except:
-        return "..."
+        return f"LLM_ERROR: {str(e)}"
 
     result = await ask_llm([{"role": "system", "content": PLANNER}, {"role": "user", "content": prompt}])
     try:
