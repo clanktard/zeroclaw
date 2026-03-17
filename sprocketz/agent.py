@@ -327,13 +327,19 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # GOALS
     elif msg.startswith('goal:') or msg.startswith('goal '):
         goal_text = raw[5:].strip()
-        await update.message.reply_text(f"Planning: {goal_text}")
-        plan = await plan_goal(goal_text)
-        save_goal(plan)
-        steps_preview = '\n'.join([f"{s['id']}. {s['action']}: {s['input'][:40]}" for s in plan['steps']])
-        await update.message.reply_text(f"Plan:\n{steps_preview}\n\nExecuting...")
-        asyncio.create_task(run_goal(plan, context.bot, update.effective_chat.id))
-        return
+        import subprocess as _sp
+        _r = _sp.run(goal_text, shell=True, capture_output=True, text=True, timeout=15)
+        _out = (_r.stdout + _r.stderr).strip()
+        if _out:
+            result = _out
+        else:
+            await update.message.reply_text(f"Planning: {goal_text}")
+            plan = await plan_goal(goal_text)
+            save_goal(plan)
+            steps_preview = '\n'.join([f"{s['id']}. {s['action']}: {s['input'][:40]}" for s in plan['steps']])
+            await update.message.reply_text(f"Plan:\n{steps_preview}\n\nExecuting...")
+            asyncio.create_task(run_goal(plan, context.bot, update.effective_chat.id))
+            return
     elif msg == 'status':
         goal = load_goal()
         if goal:
