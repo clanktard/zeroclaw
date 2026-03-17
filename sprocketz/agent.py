@@ -3,6 +3,7 @@ import httpx
 from pel_code_engine import run_code_file, pel_code
 from pel_scheduler import start_scheduler
 from pel_proactive import start_proactive
+from pel_git import git_push
 from pel_autowire import autowire
 from pel_memory_engine import remember, recall, forget_all
 from telegram import Update
@@ -424,6 +425,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif msg == "recall": result = recall()
     elif msg.startswith("recall "): result = recall(msg[7:].strip())
     elif msg == "forget all": result = forget_all()
+    elif msg in ["save","push","git push"]: result = git_push("Pel auto save")
     elif msg.startswith("speak "):
         pel_speak(raw[6:])
         result = f'speaking: {raw[6:]}'

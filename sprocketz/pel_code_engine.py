@@ -8,7 +8,7 @@ def run_code_file(filepath, language='python'):
     cmd = runners.get(language.lower())
     if not cmd: return True, f'written to {filepath}'
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30, cwd=CODE_DIR)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=CODE_DIR)
         return r.returncode==0, (r.stdout+r.stderr).strip() or 'no output'
     except subprocess.TimeoutExpired: return False, 'timed out'
     except Exception as e: return False, str(e)
