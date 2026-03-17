@@ -16,7 +16,10 @@ def run_code_file(filepath, language='python'):
 def extract_code_block(text):
     m = re.search(r'```(\w+)?\n(.*?)```', text, re.DOTALL)
     if m: return (m.group(1) or 'python').lower(), m.group(2).strip()
-    return 'python', text.strip() if text.strip() else 'print("Pel code engine online")'
+    code = text.strip()
+    if not code or len(code) > 2000 or '\n' not in code:
+        code = 'print("Pel code engine online")'
+    return 'python', code
 
 def get_ext(lang):
     return {'python':'.py','bash':'.sh','sh':'.sh','javascript':'.js','js':'.js','html':'.html'}.get(lang,'.py')
