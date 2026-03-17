@@ -33,6 +33,12 @@ async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
         language, code = extract_code_block(response)
         print(f"DEBUG lang={language} code_len={len(code)} preview={repr(code[:100])}")
         filepath = os.path.join(CODE_DIR, f"pel_{timestamp}{get_ext(language)}")
+        if 'print(' not in code:
+            code += '\nprint("done")'
+        if 'print(' not in code:
+            code += '\nprint("done")'
+        if 'print(' not in code:
+            code += '\nprint("done")'
         with open(filepath, 'w') as f: f.write(code)
         success, output = run_code_file(filepath, language)
         if success:
