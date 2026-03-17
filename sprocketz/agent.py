@@ -458,6 +458,8 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("help", cmd_help))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle))
 print("Pel running...")
+from pel_startup_check import run_checks
+run_checks()
 start_scheduler()
 start_proactive(app.bot, get_chat_id())
 set_state('idle')
