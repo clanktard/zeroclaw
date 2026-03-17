@@ -37,6 +37,7 @@ async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
         success, output = run_code_file(filepath, language)
         if success:
             await bot.send_message(chat_id=chat_id, text=f"✅ Pass {i}.\n\n{output[:800]}")
+            await send_file_to_telegram(bot, chat_id, filepath)
             break
         else:
             await bot.send_message(chat_id=chat_id, text=f"❌ {output[:400]}\n🔁 Fixing...")
@@ -47,3 +48,10 @@ async def pel_code(description, bot, chat_id, ask_llm, SYSTEM, CODER):
         return
     summary = await ask_llm([{"role":"user","content":f"One dry Banksy sentence about what this code does: {description}"}], model="openrouter/auto")
     await bot.send_message(chat_id=chat_id, text=f"🎨 {summary}\n\n📁 code/{os.path.basename(filepath)}")
+
+async def send_file_to_telegram(bot, chat_id, filepath):
+    try:
+        with open(filepath, "rb") as f:
+            await bot.send_document(chat_id=chat_id, document=f)
+    except Exception as e:
+        print("send error: " + str(e))
